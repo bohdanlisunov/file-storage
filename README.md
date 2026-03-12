@@ -1,59 +1,121 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 📁 File Storage
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel 12 + PHP 8 web application for storing PDF and DOCX files with automatic deletion after 24 hours and RabbitMQ notifications.
 
-## About Laravel
+## Tech Stack
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Backend:** Laravel 12, PHP 8.3
+- **Database:** MySQL 8.0
+- **Message Broker:** RabbitMQ 3.x
+- **Frontend:** Bootstrap 5, jQuery 3
+- **Infrastructure:** Docker, Docker Compose
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Features
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- Async file upload (PDF, DOC, DOCX) via drag & drop or file picker
+- 10MB file size limit
+- CRUD page: view list, download, and delete files
+- Files are automatically deleted 24 hours after upload
+- On every deletion (manual or automatic) — a message is published to RabbitMQ with file details and notification email
 
-## Learning Laravel
+## Project Structure
+```
+app/
+├── Console/Commands/DeleteExpiredFiles.php  # Artisan command for auto-deletion
+├── Http/Controllers/FileController.php      # CRUD + async upload
+├── Models/UploadedFile.php                  # Eloquent model
+├── Services/RabbitMQService.php             # RabbitMQ publisher
+routes/
+├── web.php                                  # HTTP routes
+├── console.php                              # Scheduler (everyMinute)
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## Running with Docker (recommended)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Requirements
+- Docker >= 24
+- Docker Compose v2
+```bash
+git clone https://github.com/bohdanlisunov/file-storage.git
+cd file-storage
+cp .env.example .env
+docker compose up -d --build
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate
+```
 
-## Laravel Sponsors
+Open: http://localhost:8080  
+RabbitMQ Management UI: http://localhost:15672 (guest / guest)
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Running Locally (without Docker)
 
-### Premium Partners
+### Requirements
+- PHP 8.1+, Composer, MySQL 8.0, RabbitMQ 3.x
+```bash
+git clone https://github.com/bohdanlisunov/file-storage.git
+cd file-storage
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+composer install
 
-## Contributing
+cp .env.example .env
+# Edit .env: set DB_*, RABBITMQ_*, NOTIFICATION_EMAIL
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+php artisan key:generate
+php artisan migrate
 
-## Code of Conduct
+# Terminal 1 — web server
+php artisan serve
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+# Terminal 2 — scheduler (checks for expired files every minute)
+php artisan schedule:work
+```
 
-## Security Vulnerabilities
+Open: http://127.0.0.1:8000
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Environment Variables
 
-## License
+| Variable | Default | Description |
+|---|---|---|
+| `DB_HOST` | `127.0.0.1` | MySQL host |
+| `DB_DATABASE` | `filestorage` | Database name |
+| `DB_USERNAME` | `laraveluser` | Database user |
+| `DB_PASSWORD` | `secret123` | Database password |
+| `RABBITMQ_HOST` | `127.0.0.1` | RabbitMQ host |
+| `RABBITMQ_PORT` | `5672` | RabbitMQ AMQP port |
+| `RABBITMQ_USER` | `guest` | RabbitMQ user |
+| `RABBITMQ_PASSWORD` | `guest` | RabbitMQ password |
+| `RABBITMQ_QUEUE` | `file_notifications` | Queue name |
+| `RABBITMQ_EXCHANGE` | `file_events` | Exchange name |
+| `NOTIFICATION_EMAIL` | `admin@example.com` | Recipient email for deletion notifications |
+| `MAX_FILE_SIZE_KB` | `10240` | Max upload size in KB (10MB) |
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## RabbitMQ Message Format
+
+Every file deletion (manual or auto-expired) publishes the following message:
+```json
+{
+  "event": "file.deleted",
+  "reason": "manual | expired",
+  "timestamp": "2026-03-12T20:00:00+00:00",
+  "notification_to": "admin@example.com",
+  "file": {
+    "id": 1,
+    "original_name": "document.pdf",
+    "size": 122490,
+    "mime_type": "application/pdf",
+    "uploaded_at": "2026-03-12T20:00:00+00:00",
+    "expired_at": "2026-03-13T20:00:00+00:00"
+  }
+}
+```
+
+> A downstream consumer of this queue reads the `notification_to` field and sends the actual email. SMTP implementation is intentionally out of scope per task requirements.
+
+## Artisan Commands
+```bash
+# Manually trigger expired file cleanup
+php artisan files:delete-expired
+
+# Start the scheduler (runs the cleanup command every minute)
+php artisan schedule:work
+```
