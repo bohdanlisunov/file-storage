@@ -16,59 +16,59 @@ A Laravel 12 + PHP 8 web application for storing PDF and DOCX files with automat
 - 10MB file size limit
 - CRUD page: view list, download, and delete files
 - Files are automatically deleted 24 hours after upload
-- On every deletion (manual or automatic) — a message is published to RabbitMQ with file details and notification email
+- On every deletion (manual or automatic) a message is published to RabbitMQ with file details and notification email
 
 ## Project Structure
-```
-app/
-├── Console/Commands/DeleteExpiredFiles.php  # Artisan command for auto-deletion
-├── Http/Controllers/FileController.php      # CRUD + async upload
-├── Models/UploadedFile.php                  # Eloquent model
-├── Services/RabbitMQService.php             # RabbitMQ publisher
-routes/
-├── web.php                                  # HTTP routes
-├── console.php                              # Scheduler (everyMinute)
-```
+
+    app/
+    ├── Console/Commands/DeleteExpiredFiles.php  # Artisan command for auto-deletion
+    ├── Http/Controllers/FileController.php      # CRUD + async upload
+    ├── Models/UploadedFile.php                  # Eloquent model
+    ├── Services/RabbitMQService.php             # RabbitMQ publisher
+    routes/
+    ├── web.php                                  # HTTP routes
+    └── console.php                              # Scheduler (everyMinute)
 
 ## Running with Docker (recommended)
 
 ### Requirements
+
 - Docker >= 24
 - Docker Compose v2
-```bash
-git clone https://github.com/bohdanlisunov/file-storage.git
-cd file-storage
-cp .env.example .env
-docker compose up -d --build
-docker compose exec app php artisan key:generate
-docker compose exec app php artisan migrate
-```
 
-Open: http://localhost:8080  
+### Steps
+
+    git clone https://github.com/bohdanlisunov/file-storage.git
+    cd file-storage
+    cp .env.example .env
+    docker compose up -d --build
+    docker compose exec app php artisan key:generate
+    docker compose exec app php artisan migrate
+
+Open: http://localhost:8080
 RabbitMQ Management UI: http://localhost:15672 (guest / guest)
 
 ## Running Locally (without Docker)
 
 ### Requirements
+
 - PHP 8.1+, Composer, MySQL 8.0, RabbitMQ 3.x
-```bash
-git clone https://github.com/bohdanlisunov/file-storage.git
-cd file-storage
 
-composer install
+### Steps
 
-cp .env.example .env
-# Edit .env: set DB_*, RABBITMQ_*, NOTIFICATION_EMAIL
+    git clone https://github.com/bohdanlisunov/file-storage.git
+    cd file-storage
+    composer install
+    cp .env.example .env
+    # Edit .env: set DB_*, RABBITMQ_*, NOTIFICATION_EMAIL
+    php artisan key:generate
+    php artisan migrate
 
-php artisan key:generate
-php artisan migrate
+    # Terminal 1 — web server
+    php artisan serve
 
-# Terminal 1 — web server
-php artisan serve
-
-# Terminal 2 — scheduler (checks for expired files every minute)
-php artisan schedule:work
-```
+    # Terminal 2 — scheduler (checks for expired files every minute)
+    php artisan schedule:work
 
 Open: http://127.0.0.1:8000
 
@@ -92,30 +92,29 @@ Open: http://127.0.0.1:8000
 ## RabbitMQ Message Format
 
 Every file deletion (manual or auto-expired) publishes the following message:
-```json
-{
-  "event": "file.deleted",
-  "reason": "manual | expired",
-  "timestamp": "2026-03-12T20:00:00+00:00",
-  "notification_to": "admin@example.com",
-  "file": {
-    "id": 1,
-    "original_name": "document.pdf",
-    "size": 122490,
-    "mime_type": "application/pdf",
-    "uploaded_at": "2026-03-12T20:00:00+00:00",
-    "expired_at": "2026-03-13T20:00:00+00:00"
-  }
-}
-```
 
-> A downstream consumer of this queue reads the `notification_to` field and sends the actual email. SMTP implementation is intentionally out of scope per task requirements.
+    {
+      "event": "file.deleted",
+      "reason": "manual | expired",
+      "timestamp": "2026-03-12T20:00:00+00:00",
+      "notification_to": "admin@example.com",
+      "file": {
+        "id": 1,
+        "original_name": "document.pdf",
+        "size": 122490,
+        "mime_type": "application/pdf",
+        "uploaded_at": "2026-03-12T20:00:00+00:00",
+        "expired_at":  "2026-03-13T20:00:00+00:00"
+      }
+    }
+
+A downstream consumer reads the `notification_to` field and sends the actual email.
+SMTP implementation is intentionally out of scope per task requirements.
 
 ## Artisan Commands
-```bash
-# Manually trigger expired file cleanup
-php artisan files:delete-expired
 
-# Start the scheduler (runs the cleanup command every minute)
-php artisan schedule:work
-```
+    # Manually trigger expired file cleanup
+    php artisan files:delete-expired
+
+    # Start the scheduler (runs cleanup every minute)
+    php artisan schedule:work
